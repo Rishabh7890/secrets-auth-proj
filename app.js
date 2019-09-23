@@ -3,6 +3,8 @@
 const express = require("express");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
+const encrypt = require("mongoose-encryption");
+require("dotenv").config();
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -26,6 +28,9 @@ const userSchema = new mongoose.Schema({
   email: String,
   password: String
 });
+
+// plugin encrypt so we can encrypt passwords using SECRET in .env file
+userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ['password']});
 
 // create model for users collection
 const User = mongoose.model("User", userSchema);
