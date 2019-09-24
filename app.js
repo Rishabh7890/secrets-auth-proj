@@ -4,6 +4,7 @@ const express = require("express");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
+const md5 = require("md5");
 require("dotenv").config();
 const PORT = process.env.PORT || 3000;
 
@@ -29,8 +30,11 @@ const userSchema = new mongoose.Schema({
   password: String
 });
 
-// plugin encrypt so we can encrypt passwords using SECRET in .env file
-userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ['password']});
+// // plugin encrypt so we can encrypt passwords using SECRET in .env file USING mongoose-encryption
+// userSchema.plugin(encrypt, {
+//   secret: process.env.SECRET,
+//   encryptedFields: ["password"]
+// });
 
 // create model for users collection
 const User = mongoose.model("User", userSchema);
@@ -53,7 +57,7 @@ app.get("/register", function(req, res) {
 // route to register new users
 app.post("/register", function(req, res) {
   const username = req.body.username;
-  const password = req.body.password;
+  const password = md5(req.body.password);
 
   // create newUser document in db
   const newUser = new User({
@@ -74,7 +78,7 @@ app.post("/register", function(req, res) {
 // route for users to login
 app.post("/login", function(req, res) {
   const username = req.body.username;
-  const password = req.body.password;
+  const password = md5(req.body.password);
 
   // look through db for a user with value entered in email field
   User.findOne({ email: username }, function(err, foundUser) {
