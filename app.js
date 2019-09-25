@@ -3,8 +3,9 @@
 const express = require("express");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
-const saltRounds = 10;
+const session = require("express-session");
+const passport = require("passport");
+const passportLocalMongoose = require("passport-local-mongoose");
 require("dotenv").config();
 const PORT = process.env.PORT || 3000;
 
@@ -15,9 +16,24 @@ app.set("view engine", "ejs");
 // mongoose middleware to be able to use findOne() methods and get rid of dep warning
 mongoose.set("useFindAndModify", false);
 
+// middleware to get rid of dep warning when using passport
+mongoose.set('useCreateIndex', true);
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static("public"));
+
+// tell app to use express-session
+app.use(session({
+  secret: process.env.SECRET,
+  resave: false,
+  saveUninitialized: false,
+}));
+
+// initialize passport
+app.use(passport.initialize());
+// tell passport to use session
+app.use(passport.session());
 
 mongoose.connect("mongodb://localhost:27017/secretsUsersDB", {
   useNewUrlParser: true,
@@ -30,14 +46,18 @@ const userSchema = new mongoose.Schema({
   password: String
 });
 
-// // plugin encrypt so we can encrypt passwords using SECRET in .env file USING mongoose-encryption
-// userSchema.plugin(encrypt, {
-//   secret: process.env.SECRET,
-//   encryptedFields: ["password"]
-// });
+// enable plugin passport-local-mongoose in userSchema
+userSchema.plugin(passportLocalMongoose);
 
 // create model for users collection
 const User = mongoose.model("User", userSchema);
+
+// createStrategy is responsible to setup passport-local LocalStrategy with the correct options.
+passport.use(User.createStrategy());
+
+// use static serialize and deserialize of model for passport session support
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 // route to get root route
 app.get("/", function(req, res) {
@@ -54,52 +74,56 @@ app.get("/register", function(req, res) {
   res.render("register");
 });
 
+// route to get secrets route once authenticated
+app.get("/secrets", function(req, res){
+  if(req.isAuthenticated()){
+    res.render("secrets");
+  } else {
+    res.redirect("/login");
+  }
+});
+
+// route for logging out
+app.get("/logout", function(req, res){
+  req.logout();
+  res.redirect("/");
+});
+
 // route to register new users
 app.post("/register", function(req, res) {
-  const username = req.body.username;
-  const password = req.body.password;
-
-  // use bcrypt to hash entered password with 10 saltRounds
-  bcrypt.hash(password, saltRounds, function(err, hash) {
-    // Store hash in your password DB.
-    // create newUser document in db
-    const newUser = new User({
-      email: username,
-      password: hash
-    });
-    // save newUser to db
-    newUser.save(function(err) {
-      if (err) {
-        res.json(err);
-      } else {
-        // if no errors render secrets page
-        res.render("secrets");
-      }
-    });
+  // use passport-local-mongoose register() to register user
+  User.register({username: req.body.username}, req.body.password, function(err, user){
+    if(err){
+      console.log(err);
+      res.redirect("/register");
+    } else {
+      passport.authenticate("local")(req, res, function(){
+        res.redirect("/secrets");
+      });
+    }
   });
 });
 
 // route for users to login
 app.post("/login", function(req, res) {
-  const username = req.body.username;
-  const password = req.body.password;
+  // create user that wishes to login
+  const user = new User ({
+    username: req.body.username,
+    password: req.body.password
+  });
 
-  // look through db for a user with value entered in email field
-  User.findOne({ email: username }, function(err, foundUser) {
-    if (err) {
-      res.json(err);
+  // use passport's login() to login and authenticate user
+  req.login(user, function(err){
+    if(err){
+      console.log(err);
     } else {
-      if (foundUser) {
-        // use bcrypt.compare to load hash from db and compare
-        bcrypt.compare(password, foundUser.password, function(err, result) {
-          // check if hash for 'password' is === hash in db
-          if(result === true){
-            res.render("secrets");
-          }
-        });
-      }
+      passport.authenticate("local")(req, res, function(){
+        res.redirect("/secrets");
+      });
     }
   });
+
+
 });
 
 app.listen(PORT, function() {
