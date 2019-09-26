@@ -52,7 +52,8 @@ const userSchema = new mongoose.Schema({
   password: String,
   googleId: String,
   twitterId: String,
-  instagramId: String
+  instagramId: String,
+  secret: String
 });
 
 // enable plugin passport-local-mongoose in userSchema
@@ -187,10 +188,26 @@ app.get("/register", function(req, res) {
   res.render("register");
 });
 
-// route to get secrets route once authenticated
+// route to get secrets route
 app.get("/secrets", function(req, res) {
+  // go through db and find all documents with secret not null
+  User.find({"secret": {$ne: null} }, function(err, foundUsers){
+    if(err){
+      console.log(err);
+    } else {
+      if(foundUsers){
+        // usersWithSecrets correlates to ejs marker in secrets.ejs
+        res.render("secrets", {usersWithSecrets: foundUsers});
+      }
+    }
+  })
+});
+
+// get route for submit page if authenticated
+app.get("/submit", function(req, res){
+  // check to see if user is authenticated. If so take to submit page, if not take to login page
   if (req.isAuthenticated()) {
-    res.render("secrets");
+    res.render("submit");
   } else {
     res.redirect("/login");
   }
@@ -234,6 +251,27 @@ app.post("/login", function(req, res) {
       console.log(err);
     } else {
       passport.authenticate("local")(req, res, function() {
+        res.redirect("/secrets");
+      });
+    }
+  });
+});
+
+// route to post new secret
+app.post("/submit", function(req, res){
+  // create const for secret user inputted
+  const submittedSecret = req.body.secret;
+
+  // console user's id when we click submit to use in findById function
+  console.log(req.user.id);
+
+  // find current logged in user in db and save secret to their file
+  User.findById(req.user.id, function(err, foundUser){
+    if(err){
+      console.log(err);
+    } else {
+      foundUser.secret = submittedSecret;
+      foundUser.save(function(){
         res.redirect("/secrets");
       });
     }
