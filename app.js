@@ -7,6 +7,7 @@ const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const TwitterStrategy = require("passport-twitter").Strategy;
 const findOrCreate = require("mongoose-findorcreate");
 require("dotenv").config();
 const PORT = process.env.PORT || 3000;
@@ -48,7 +49,8 @@ mongoose.connect("mongodb://localhost:27017/secretsUsersDB", {
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
-  googleId: String
+  googleId: String,
+  twitterId: String
 });
 
 // enable plugin passport-local-mongoose in userSchema
@@ -63,7 +65,7 @@ const User = mongoose.model("User", userSchema);
 // createStrategy is responsible to setup passport-local LocalStrategy with the correct options.
 passport.use(User.createStrategy());
 
-// serialize and deserialize user so that it works for all strategies. 
+// serialize and deserialize user so that it works for all strategies.
 // Directly from Passport Docs
 passport.serializeUser(function(user, done) {
   done(null, user.id);
@@ -94,6 +96,22 @@ passport.use(
   )
 );
 
+// configure TwitterStrategy
+passport.use(
+  new TwitterStrategy(
+    {
+      consumerKey: process.env.TWITTER_CONSUMER_KEY,
+      consumerSecret: process.env.TWITTER_CONSUMER_SECRET,
+      callbackURL: "http://localhost:3000/auth/twitter/secrets"
+    },
+    function(token, tokenSecret, profile, cb) {
+      User.findOrCreate({ twitterId: profile.id }, function(err, user) {
+        return cb(err, user);
+      });
+    }
+  )
+);
+
 // route to get root route
 app.get("/", function(req, res) {
   res.render("home");
@@ -111,6 +129,19 @@ app.get(
   passport.authenticate("google", { failureRedirect: "/login" }),
   function(req, res) {
     // Successful authentication, redirect to secrets page.
+    res.redirect("/secrets");
+  }
+);
+
+// route for twitter login. Use passport to auth user
+app.get("/auth/twitter", passport.authenticate("twitter"));
+
+// route for redirecting after twitter authentication
+app.get(
+  "/auth/twitter/secrets",
+  passport.authenticate("twitter", { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect home.
     res.redirect("/secrets");
   }
 );
