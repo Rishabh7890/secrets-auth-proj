@@ -8,6 +8,7 @@ const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const TwitterStrategy = require("passport-twitter").Strategy;
+const InstagramStrategy = require("passport-instagram").Strategy;
 const findOrCreate = require("mongoose-findorcreate");
 require("dotenv").config();
 const PORT = process.env.PORT || 3000;
@@ -50,7 +51,8 @@ const userSchema = new mongoose.Schema({
   email: String,
   password: String,
   googleId: String,
-  twitterId: String
+  twitterId: String,
+  instagramId: String
 });
 
 // enable plugin passport-local-mongoose in userSchema
@@ -112,6 +114,22 @@ passport.use(
   )
 );
 
+// configure InstagramStrategy
+passport.use(
+  new InstagramStrategy(
+    {
+      clientID: process.env.INSTAGRAM_CLIENT_ID,
+      clientSecret: process.env.INSTAGRAM_CLIENT_SECRET,
+      callbackURL: "http://localhost:3000/auth/instagram/secrets"
+    },
+    function(accessToken, refreshToken, profile, done) {
+      User.findOrCreate({ instagramId: profile.id }, function(err, user) {
+        return done(err, user);
+      });
+    }
+  )
+);
+
 // route to get root route
 app.get("/", function(req, res) {
   res.render("home");
@@ -140,6 +158,19 @@ app.get("/auth/twitter", passport.authenticate("twitter"));
 app.get(
   "/auth/twitter/secrets",
   passport.authenticate("twitter", { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect("/secrets");
+  }
+);
+
+// route for instagram login. Use passport to auth user
+app.get("/auth/instagram", passport.authenticate("instagram"));
+
+// route gor redirecting after instagram authentication
+app.get(
+  "/auth/instagram/secrets",
+  passport.authenticate("instagram", { failureRedirect: "/login" }),
   function(req, res) {
     // Successful authentication, redirect home.
     res.redirect("/secrets");
