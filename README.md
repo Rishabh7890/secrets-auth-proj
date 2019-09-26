@@ -2,7 +2,7 @@
 
 #### Basic application to practice using different Authentication methods from weak to strong. 
 
-## Methods include: 
+## Authentication Methods Include: 
 
 * Mongoose-Encryption
 * Md5
